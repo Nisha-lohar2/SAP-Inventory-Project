@@ -1,0 +1,520 @@
+*&---------------------------------------------------------------------*
+*& Include          Z81_MANAGEMENT_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form screate
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM screate .
+
+  SELECT MAX( supplier_id )
+          FROM zdt81_suppliers
+          INTO @DATA(lv_max).
+  CLEAR : gs_supplier.
+  gs_supplier-supplier_name = zdt81_suppliers-supplier_name.
+  gs_supplier-contact = zdt81_suppliers-contact.
+  gs_supplier-address = zdt81_suppliers-address.
+  IF gs_supplier IS NOT INITIAL.
+    gs_supplier-mandt = 200.
+    gs_supplier-supplier_id = lv_max + 1.
+    INSERT zdt81_suppliers FROM gs_supplier.
+    IF sy-subrc <> 0.
+      MESSAGE 'Error creating new supplier' TYPE 'E'.
+      else.
+        message 'New Supplier Created' type 'S'.
+    ENDIF.
+    APPEND gs_supplier TO gt_supplier.
+  ELSE.
+    MESSAGE: 'please provide the information' TYPE 'I'.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form pscreate
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM pscreate .
+
+  SELECT MAX( sales_id )
+          FROM zdt81_prod_sales
+          INTO @gv_max_sales_id.
+  CLEAR gs_sales.
+  gs_sales-product_id = zdt81_prod_sales-product_id.
+  gs_sales-quantity_sold = zdt81_prod_sales-quantity_sold.
+  IF gs_sales IS NOT INITIAL.
+    gs_sales-mandt = 200.
+    gs_sales-sales_id = gv_max_sales_id + 1.
+    gs_sales-sales_date = sy-datum.
+    SELECT SINGLE quantity, price
+       FROM zdt81_products
+          INTO @DATA(ls_data)
+          WHERE product_id = @zdt81_prod_sales-product_id.
+    IF sy-subrc <> 0.
+      MESSAGE 'No product available with this id' TYPE 'E'.
+    ELSE.
+      IF ls_data-quantity = 0.
+
+        MESSAGE 'Stock empty for this product' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    gv_amount = ls_data-price * zdt81_prod_sales-quantity_sold.
+    gs_sales-total_amount = gv_amount.
+
+    INSERT zdt81_prod_sales FROM gs_sales.
+    IF sy-subrc <> 0.
+      MESSAGE 'Error creating new sale' TYPE 'E'.
+    ELSE.
+      gv_quantity = ls_data-quantity - zdt81_prod_sales-quantity_sold.
+      UPDATE zdt81_products
+      SET quantity = gv_quantity
+      WHERE product_id = zdt81_prod_sales-product_id.
+      IF sy-subrc <> 0.
+        MESSAGE 'error' TYPE 'E'.
+      ENDIF.
+      MESSAGE 'Sale appended' type 'S'.
+    ENDIF.
+    APPEND gs_sales TO gt_sales.
+  ELSE.
+    MESSAGE 'PLEASE PROVIDE ALL INFORMATION' TYPE 'I'.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_invoice
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_invoice .
+
+  CONSTANTS lv_form_name TYPE fpname VALUE 'ZAF_81_INVOICE'.
+  DATA: lv_fm_name TYPE funcname.
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = lv_form_name
+    IMPORTING
+      e_funcname = lv_fm_name.
+
+    DATA: ls_form_output TYPE sfpoutputparams,
+        ls_pdf         TYPE fpformoutput.
+
+    ls_form_output-dest = 'LP01'.
+*LS_FORM_OUTPUT-NODIALOG = 'X'.
+
+ CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = ls_form_output
+    EXCEPTIONS
+      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+    MESSAGE e020(ztask4).
+  ENDIF.
+
+CALL FUNCTION lv_fm_name
+  EXPORTING
+*   /1BCDWB/DOCPARAMS        =
+    is_details               = gs_sales
+ IMPORTING
+   /1BCDWB/FORMOUTPUT       = ls_pdf
+ EXCEPTIONS
+   USAGE_ERROR              = 1
+   SYSTEM_ERROR             = 2
+   INTERNAL_ERROR           = 3
+   OTHERS                   = 4
+          .
+IF sy-subrc <> 0.
+MESSAGE 'Error generating invoice' type 'E'.
+ENDIF.
+
+
+    CALL FUNCTION 'FP_JOB_CLOSE'
+* IMPORTING
+*   E_RESULT             =
+    EXCEPTIONS
+      usage_error    = 1
+      system_error   = 2
+      internal_error = 3
+      OTHERS         = 4.
+  IF sy-subrc <> 0.
+    MESSAGE e021(ztask4).
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_result1
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_result1 .
+
+  CLEAR : gt_header[].
+
+*fetching data from sales transaction table for further analysis
+      SELECT product_id, quantity_sold, total_amount
+          FROM zdt81_prod_sales
+          INTO TABLE @gt_report.
+      IF sy-subrc <> 0.
+        MESSAGE 'Error generating report' TYPE 'E'.
+      ENDIF.
+*fetching data from product table for further analysis
+      SELECT product_id, category, supplier_id
+        FROM zdt81_products
+        INTO TABLE @DATA(lt_temp).
+      IF sy-subrc <> 0.
+        MESSAGE 'Error generating report' TYPE 'E'.
+      ENDIF.
+
+      SORT : gt_report BY product_id,
+              lt_temp BY product_id.
+
+*getting required details based on sales and product table
+      LOOP AT gt_report INTO gs_report.
+        READ TABLE lt_temp INTO DATA(ls_temp) WITH KEY product_id = gs_report-product_id.
+        IF sy-subrc = 0.
+          gs_report-category = ls_temp-category.
+          gs_report-supplier_id = ls_temp-supplier_id.
+          MODIFY gt_report FROM gs_report TRANSPORTING category supplier_id.
+        ENDIF.
+      ENDLOOP.
+
+      SORT gt_report BY category.
+
+*Calculating total sales based on category
+      LOOP AT gt_report INTO gs_report.
+        READ TABLE gt_result1 INTO gs_result1 WITH KEY category = gs_report-category.
+        IF sy-subrc = 0.
+          gs_result1-sales = gs_result1-sales + gs_report-quantity_sold.
+        ELSE.
+          MODIFY gt_result1 FROM gs_result1 TRANSPORTING sales WHERE category = gs_result1-category.
+          gs_result1-category = gs_report-category.
+          gs_result1-sales = gs_report-quantity_sold.
+          APPEND gs_result1 TO gt_result1.
+        ENDIF.
+      ENDLOOP.
+      MODIFY gt_result1 FROM gs_result1 TRANSPORTING sales WHERE category = gs_result1-category.
+
+*giving header details for data download
+      gt_header-line = 'Category'.
+      APPEND gt_header.
+      gt_header-line = 'Sales'.
+      APPEND gt_header.
+
+
+
+*class method called for dialog box to get file path from pc
+*      CALL METHOD cl_gui_frontend_services=>file_open_dialog
+*        CHANGING
+*          file_table  = gt_file_table
+*          rc          = gv_rc
+*          user_action = gv_user_action.
+*      IF sy-subrc <> 0.
+*        MESSAGE 'Error fetching file path' TYPE 'E'.
+*      ENDIF.
+      CALL METHOD cl_gui_frontend_services=>file_save_dialog
+        EXPORTING
+          window_title              = 'Download'
+          default_file_name         = 'excel.xlsx'
+          prompt_on_overwrite       = 'X'
+        CHANGING
+          filename                  = ld_filename
+          path                      = ld_path
+          fullpath                  = ld_fullpath
+        EXCEPTIONS
+          cntl_error                = 1
+          error_no_gui              = 2
+          not_supported_by_gui      = 3
+          invalid_default_file_name = 4
+          OTHERS                    = 5.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+
+
+*assigning the file to file type string
+*      LOOP AT gt_file_table INTO gs_file_table.
+*        g_file = gs_file_table-filename.
+*      ENDLOOP.
+      TRY.
+          CREATE OBJECT lo_excel.
+
+          lo_worksheet = lo_excel->get_active_worksheet( ).    "get active worksheet
+
+* Name the worksheet
+          lo_worksheet->set_title( ip_title = 'Sales Data' ).
+
+          lo_xl_converter = NEW zcl_excel_converter( ).
+
+*    method to convert internal table to excel
+          lo_xl_converter->convert(
+           EXPORTING
+             it_table      = gt_result1
+             io_worksheet  = lo_worksheet
+           CHANGING
+             co_excel      = lo_excel ) .
+
+*      CALL FUNCTION 'GUI_DOWNLOAD'
+*        EXPORTING
+*          filename   = g_file
+*          filetype   = 'DBF'
+**         write_field_separator = 'X'
+*        TABLES
+*          data_tab   = gt_result1
+*          fieldnames = gt_header.
+*      IF sy-subrc <> 0.
+*        MESSAGE 'Error downloading report' TYPE 'E'.
+*      ENDIF.
+          DATA(lo_excel_writer) = CAST zif_excel_writer( NEW zcl_excel_writer_2007( ) ).
+
+          "excel file as xstring
+          DATA(lv_excel_data) = lo_excel_writer->write_file( lo_excel ).
+
+          "convert the xstring to raw string to download as a file
+          DATA(it_raw_data) = cl_bcs_convert=>xstring_to_solix(
+          EXPORTING iv_xstring = lv_excel_data ).
+
+          "method to download excel
+          cl_gui_frontend_services=>gui_download(
+          EXPORTING filename = ld_fullpath && '.xlsx'
+          filetype = 'BIN'
+          bin_filesize = xstrlen( lv_excel_data )
+          CHANGING
+          data_tab = it_raw_data
+          EXCEPTIONS
+            file_write_error          = 1
+            no_batch                  = 2
+            gui_refuse_filetransfer   = 3
+            invalid_type              = 4
+            no_authority              = 5
+            unknown_error             = 6
+            header_not_allowed        = 7
+            separator_not_allowed     = 8
+            filesize_not_allowed      = 9
+            header_too_long           = 10
+            dp_error_create           = 11
+            dp_error_send             = 12
+            dp_error_write            = 13
+            unknown_dp_error          = 14
+            access_denied             = 15
+            dp_out_of_memory          = 16
+            disk_full                 = 17
+            dp_timeout                = 18
+            file_not_found            = 19
+            dataprovider_exception    = 20
+            control_flush_error       = 21
+            not_supported_by_gui      = 22
+            error_no_gui              = 23
+            OTHERS                    = 24 ).
+          IF sy-subrc <> 0.
+            MESSAGE 'Error Downloading' TYPE 'E'.
+          ENDIF.
+
+
+        CATCH cx_root INTO DATA(ex_txt).
+
+          WRITE: / ex_txt->get_text( ).
+
+      ENDTRY.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_result2
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_result2 .
+
+   CLEAR : gt_header[] .
+
+*fetching data from sales transaction table for further analysis
+      SELECT product_id, quantity_sold, total_amount
+       FROM zdt81_prod_sales
+       INTO TABLE @gt_report.
+      IF sy-subrc <> 0.
+        MESSAGE 'Error generating report' TYPE 'E'.
+      ENDIF.
+
+*fetching data from product table for further analysis
+      SELECT product_id, category, supplier_id
+        FROM zdt81_products
+        INTO TABLE @data(lt_temp).
+      IF sy-subrc <> 0.
+        MESSAGE 'Error generating report' TYPE 'E'.
+      ENDIF.
+
+      SORT : gt_report BY product_id,
+              lt_temp BY product_id.
+
+*getting required details based on sales and product table
+      LOOP AT gt_report INTO gs_report.
+        READ TABLE lt_temp INTO data(ls_temp) WITH KEY product_id = gs_report-product_id.
+        IF sy-subrc = 0.
+          gs_report-category = ls_temp-category.
+          gs_report-supplier_id = ls_temp-supplier_id.
+          MODIFY gt_report FROM gs_report TRANSPORTING category supplier_id.
+        ENDIF.
+      ENDLOOP.
+
+      SORT gt_report BY supplier_id.
+
+*Calculating total revenue based on supplier id
+      LOOP AT gt_report INTO gs_report.
+        READ TABLE gt_result2 INTO gs_result2 WITH KEY supplier_id = gs_report-supplier_id.
+        IF sy-subrc = 0.
+          gs_result2-revenue = gs_result2-revenue + gs_report-total_amount.
+        ELSE.
+          MODIFY gt_result2 FROM gs_result2 TRANSPORTING revenue WHERE supplier_id = gs_result2-supplier_id.
+          gs_result2-supplier_id = gs_report-supplier_id.
+          gs_result2-revenue = gs_report-total_amount.
+          APPEND gs_result2 TO gt_result2.
+        ENDIF.
+
+      ENDLOOP.
+      MODIFY gt_result2 FROM gs_result2 TRANSPORTING revenue WHERE supplier_id = gs_result2-supplier_id.
+
+*giving header details for data download
+*      gt_header-line = 'SUPPLIER ID'.
+*      APPEND gt_header.
+*      gt_header-line = 'TOTAL REVENUE'.
+*      APPEND gt_header.
+
+*class method called for dialog box to get file path from pc
+*      CALL METHOD cl_gui_frontend_services=>file_open_dialog
+*        CHANGING
+*          file_table  = gt_file_table
+*          rc          = gv_rc
+*          user_action = gv_user_action.
+*      IF sy-subrc <> 0.
+*        MESSAGE 'Error fetching file path' TYPE 'E'.
+*      ENDIF.
+
+      CALL METHOD cl_gui_frontend_services=>file_save_dialog
+        EXPORTING
+          window_title              = 'Download'
+          default_file_name         = 'excel.xlsx'
+          prompt_on_overwrite       = 'X'
+        CHANGING
+          filename                  = ld_filename
+          path                      = ld_path
+          fullpath                  = ld_fullpath
+        EXCEPTIONS
+          cntl_error                = 1
+          error_no_gui              = 2
+          not_supported_by_gui      = 3
+          invalid_default_file_name = 4
+          OTHERS                    = 5.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+*      LOOP AT gt_file_table INTO gs_file_table.
+*        g_file = gs_file_table-filename.
+*      ENDLOOP.
+
+      TRY.
+          CREATE OBJECT lo_excel.
+
+          lo_worksheet = lo_excel->get_active_worksheet( ).    "get active worksheet
+
+* Name the worksheet
+          lo_worksheet->set_title( ip_title = 'Total Revenue' ).
+
+          lo_xl_converter = NEW zcl_excel_converter( ).
+
+*    method to convert internal table to excel
+          lo_xl_converter->convert(
+           EXPORTING
+             it_table      = gt_result2
+             io_worksheet  = lo_worksheet
+           CHANGING
+             co_excel      = lo_excel ) .
+
+*assigning the file to file type string
+*      CALL FUNCTION 'GUI_DOWNLOAD'
+*        EXPORTING
+*          filename   = g_file
+*          filetype   = 'DBF'
+**         write_field_separator = 'X'
+*        TABLES
+*          data_tab   = gt_result2
+*          fieldnames = gt_header.
+*      IF sy-subrc <> 0.
+*        MESSAGE 'Error downloading report' TYPE 'E'.
+*      ENDIF.
+*
+*  ENDCASE.
+
+          data(lo_excel_writer) = CAST zif_excel_writer( NEW zcl_excel_writer_2007( ) ).
+
+          "excel file as xstring
+          data(lv_excel_data) = lo_excel_writer->write_file( lo_excel ).
+
+          "convert the xstring to raw string to download as a file
+          data(it_raw_data) = cl_bcs_convert=>xstring_to_solix(
+          EXPORTING iv_xstring = lv_excel_data ).
+
+          "method to download excel
+          cl_gui_frontend_services=>gui_download(
+          EXPORTING filename = ld_fullpath && '.xlsx'
+          filetype = 'BIN'
+          bin_filesize = xstrlen( lv_excel_data )
+          CHANGING
+          data_tab = it_raw_data
+          EXCEPTIONS
+            file_write_error          = 1
+            no_batch                  = 2
+            gui_refuse_filetransfer   = 3
+            invalid_type              = 4
+            no_authority              = 5
+            unknown_error             = 6
+            header_not_allowed        = 7
+            separator_not_allowed     = 8
+            filesize_not_allowed      = 9
+            header_too_long           = 10
+            dp_error_create           = 11
+            dp_error_send             = 12
+            dp_error_write            = 13
+            unknown_dp_error          = 14
+            access_denied             = 15
+            dp_out_of_memory          = 16
+            disk_full                 = 17
+            dp_timeout                = 18
+            file_not_found            = 19
+            dataprovider_exception    = 20
+            control_flush_error       = 21
+            not_supported_by_gui      = 22
+            error_no_gui              = 23
+            OTHERS                    = 24 ).
+          IF sy-subrc <> 0.
+            MESSAGE 'Error Downloading' TYPE 'E'.
+          ENDIF.
+
+
+        CATCH cx_root INTO data(ex_txt).
+
+          WRITE: / ex_txt->get_text( ).
+
+      ENDTRY.
+
+ENDFORM.

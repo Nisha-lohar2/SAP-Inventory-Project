@@ -1,0 +1,26 @@
+PROCESS BEFORE OUTPUT.
+  MODULE status_9003.
+*
+  LOOP AT gt_supplier INTO gs_supplier WITH CONTROL tc1
+      CURSOR tc1-current_line.
+    MODULE get_data.
+  ENDLOOP.
+
+PROCESS AFTER INPUT.
+
+  LOOP AT gt_supplier.
+
+    CHAIN.
+      FIELD : zdt81_suppliers-supplier_name, zdt81_suppliers-contact,
+    zdt81_suppliers-address
+    MODULE update1 ON CHAIN-REQUEST.
+    ENDCHAIN.
+
+    FIELD: gv_select
+    MODULE mark ON REQUEST.
+
+  ENDLOOP.
+
+  MODULE keys AT EXIT-COMMAND.
+
+  MODULE user_command_9003.

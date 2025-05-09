@@ -1,0 +1,24 @@
+PROCESS BEFORE OUTPUT.
+  MODULE status_9004.
+  LOOP AT gt_sales INTO gs_sales WITH CONTROL tc2
+     CURSOR tc2-current_line.
+    MODULE get_sales_data.
+  ENDLOOP.
+
+PROCESS AFTER INPUT.
+
+  LOOP AT gt_sales.
+
+    CHAIN.
+      FIELD: zdt81_prod_sales-quantity_sold, zdt81_prod_sales-product_id
+      MODULE update1 ON CHAIN-REQUEST.
+    ENDCHAIN.
+
+    FIELD gv_select
+    MODULE mark ON REQUEST.
+
+  ENDLOOP.
+
+  MODULE keys AT EXIT-COMMAND.
+
+  MODULE user_command_9004.

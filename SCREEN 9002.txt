@@ -1,0 +1,13 @@
+PROCESS BEFORE OUTPUT.
+  MODULE status_9002.
+*
+PROCESS AFTER INPUT.
+
+*chain.
+*  FIELD : zdt81_products-product_id "zdt81_products-supplier_id
+*  MODULE product_verify ON INPUT.
+*endchain.
+
+  MODULE keys AT EXIT-COMMAND.
+
+  MODULE user_command_9002.

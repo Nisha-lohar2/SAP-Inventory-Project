@@ -1,0 +1,14 @@
+*&---------------------------------------------------------------------*
+*& Modulpool Z81_MANAGEMENT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+PROGRAM Z81_MANAGEMENT.
+
+INCLUDE Z81_MANAGEMENT_TOP.
+
+INCLUDE Z81_MANAGEMENT_PAI.
+
+INCLUDE Z81_MANAGEMENT_PBO.
+
+INCLUDE Z81_MANAGEMENT_F01.

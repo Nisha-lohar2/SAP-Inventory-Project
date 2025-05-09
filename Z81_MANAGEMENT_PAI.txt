@@ -1,0 +1,408 @@
+*&---------------------------------------------------------------------*
+*& Include          Z81_MANAGEMENT_PAI
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9001  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9001 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'PM'.
+      CALL SCREEN 9002.
+    WHEN 'SM'.
+      SELECT mandt, supplier_id, supplier_name,
+        contact, address
+         FROM zdt81_suppliers
+      INTO TABLE @gt_supplier.
+      IF sy-subrc <> 0.
+        MESSAGE 'No Data' TYPE 'I'.
+      ENDIF.
+      DESCRIBE TABLE gt_supplier LINES tc1-lines.
+      IF NOT tc1-lines IS INITIAL.
+        IF tc1-lines = sy-tabix.
+          screen-input = 0.
+        ENDIF.
+      ENDIF.
+
+      CALL SCREEN 9003.
+
+    WHEN 'PSM'.
+      SELECT mandt, sales_id, product_id,
+        sales_date, quantity_sold, total_amount
+        FROM zdt81_prod_sales
+        INTO TABLE @gt_sales.
+      IF sy-subrc <> 0.
+        MESSAGE 'No Data' TYPE 'I'.
+      ENDIF.
+      DESCRIBE TABLE gt_sales LINES tc2-lines.
+      IF NOT tc2-lines IS INITIAL.
+        IF tc2-lines = sy-tabix.
+          screen-input = 0.
+        ENDIF.
+      ENDIF.
+
+      CALL SCREEN 9004.
+
+    WHEN 'BACK'.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'EXIT'.
+      SET SCREEN 9001.
+
+    WHEN 'CANCEL'.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'REPORT'.
+      CALL SCREEN 9005.
+
+
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  PRODUCT_VERIFY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE product_verify INPUT.
+
+*  SELECT SINGLE supplier_id
+*    FROM zdt81_suppliers
+*    INTO @gv_supplier
+*    WHERE supplier_id = @zdt81_products-supplier_id.
+*  IF sy-subrc <> 0.
+*    MESSAGE 'No supplier available with this id' TYPE 'E'.
+*  ENDIF.
+
+  SELECT SINGLE product_id
+        FROM zdt81_products
+        INTO @DATA(gv_productid)
+        WHERE product_id = @zdt81_products-product_id.
+  IF sy-subrc <> 0.
+    MESSAGE 'No data found for this id' TYPE 'E'.
+  ENDIF.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9002  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9002 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'PCREATE'.
+*    when 'PUPDATE'.
+*      if gv_toggle_flag is not INITIAL.
+      gs_products-mandt = 200.
+      gs_products-product_id = zdt81_products-product_id.
+      gs_products-product_name = zdt81_products-product_name.
+      gs_products-category = zdt81_products-category.
+      gs_products-supplier_id = zdt81_products-supplier_id.
+      gs_products-quantity = zdt81_products-quantity.
+      gs_products-price = zdt81_products-price.
+
+      INSERT zdt81_products FROM gs_products.
+      IF sy-subrc <> 0.
+        MESSAGE 'Error creating product' TYPE 'E'.
+      ELSE.
+        MESSAGE 'New Product entry created' TYPE 'S'.
+      ENDIF.
+*      endif.
+
+    WHEN 'PENTER' OR 'PDISPLAY'.
+      SELECT SINGLE  mandt, product_id, product_name, category, supplier_id, quantity, price
+        FROM zdt81_products
+        INTO @gs_products
+        WHERE product_id = @zdt81_products-product_id.
+      IF sy-subrc <> 0.
+        MESSAGE 'No data found for this id' TYPE 'W'.
+      ENDIF.
+      zdt81_products-product_id = gs_products-product_id.
+      zdt81_products-product_name  = gs_products-product_name.
+      zdt81_products-category = gs_products-category.
+      zdt81_products-supplier_id = gs_products-supplier_id.
+      zdt81_products-quantity = gs_products-quantity.
+      zdt81_products-price = gs_products-price.
+
+    WHEN 'PUPDATE'.
+*if gv_toggle_flag is initial.
+      UPDATE zdt81_products
+      SET quantity = zdt81_products-quantity price = zdt81_products-price
+      WHERE product_id = zdt81_products-product_id.
+      IF sy-subrc <> 0.
+        MESSAGE 'Error updating product details' TYPE 'E'.
+      ELSE.
+        MESSAGE 'data updated' TYPE 'S'.
+      ENDIF.
+*endif.
+    WHEN 'PDELETE'.
+
+      DELETE zdt81_products FROM gs_products.
+      IF sy-subrc = 0.
+        MESSAGE 'Record Deleted Successfully' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Error Deleting Record' TYPE 'E'.
+      ENDIF.
+
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9003  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9003 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'SNEW'.
+      CLEAR: zdt81_suppliers-supplier_name, zdt81_suppliers-contact, zdt81_suppliers-address.
+      gv_flag1 = 1.
+
+    WHEN 'SCREATE'.
+      PERFORM screate.
+
+    WHEN ''.
+      PERFORM screate.
+
+  ENDCASE.
+
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  MARK  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE mark INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'SDELETE'.
+
+      READ TABLE gt_supplier INTO gs_supplier INDEX tc1-current_line.
+      IF sy-subrc IS INITIAL.
+        DELETE zdt81_suppliers FROM gs_supplier.
+        IF sy-subrc <> 0.
+          MESSAGE 'Error Deleting' TYPE 'E'.
+        ELSE.
+          MESSAGE 'Record Deleted Successfully' TYPE 'S'.
+          DELETE FROM zdt81_products WHERE supplier_id = gs_supplier-supplier_id.
+        ENDIF.
+        DELETE gt_supplier WHERE supplier_id = gs_supplier-supplier_id.
+        DESCRIBE TABLE gt_supplier LINES tc1-lines.
+        IF tC1-lines = sy-tabix.
+          screen-input = 0.
+        ENDIF.
+      ENDIF.
+
+    WHEN 'PS_DELETE'.
+      READ TABLE gt_sales INTO gs_sales INDEX tc2-current_line.
+      IF sy-subrc IS INITIAL.
+        DELETE zdt81_prod_sales FROM gs_sales.
+        IF sy-subrc <> 0.
+          MESSAGE 'Error Deleting' TYPE 'E'.
+        ELSE.
+          MESSAGE 'Record Deleted Successfully' TYPE 'S'.
+        ENDIF.
+        DELETE gt_sales WHERE sales_id = gs_sales-sales_id.
+        DESCRIBE TABLE gt_supplier LINES tc1-lines.
+        IF tC1-lines = sy-tabix.
+          screen-input = 0.
+        ENDIF.
+      ENDIF.
+
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9004  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9004 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'PSNEW'.
+      gv_flag1 = 1.
+
+
+    WHEN 'PSCREATE'.
+      PERFORM pscreate.
+      gv_invoice = 'X'.
+
+    WHEN ''.
+      PERFORM pscreate.
+      gv_invoice = 'X'.
+    WHEN 'INVOICE'.
+      PERFORM f_invoice.
+      GV_INVOICE = ' '.
+
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  UPDATE1  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE update1 INPUT.
+  CASE sy-ucomm.
+    WHEN 'SUPDATE'.
+      READ TABLE gt_supplier INTO gs_supplier INDEX tc1-current_line.
+      IF sy-subrc IS INITIAL.
+
+        gs_supplier-supplier_name = zdt81_suppliers-supplier_name.
+        gs_supplier-contact = zdt81_suppliers-contact.
+        gs_supplier-address = zdt81_suppliers-address.
+
+        UPDATE zdt81_suppliers
+        SET supplier_name = zdt81_suppliers-supplier_name
+        contact = zdt81_suppliers-contact
+        address = zdt81_suppliers-address
+        WHERE supplier_id = gs_supplier-supplier_id.
+        IF sy-subrc <> 0.
+          MESSAGE 'ERROR UPDATING' TYPE 'E'.
+        ELSE.
+          MESSAGE 'Record updated successfully' TYPE 'S'.
+          MODIFY gt_supplier FROM gs_supplier
+          TRANSPORTING supplier_name contact address
+          WHERE supplier_id = gs_supplier-supplier_id.
+
+
+        ENDIF.
+      ENDIF.
+
+    WHEN 'PS_UPDATE'.
+      READ TABLE gt_sales INTO gs_sales INDEX tc2-current_line.
+      IF sy-subrc IS INITIAL.
+
+        IF gs_sales-product_id <> zdt81_prod_sales-product_id.
+          zdt81_prod_sales-product_id = gs_sales-product_id.
+          MESSAGE 'you can not change product id' TYPE 'E'.
+
+        ENDIF.
+
+        IF gs_sales-quantity_sold <> zdt81_prod_sales-quantity_sold.
+          SELECT SINGLE price , quantity
+            FROM zdt81_products
+            INTO @DATA(ls_data1)
+            WHERE product_id = @zdt81_prod_sales-product_id.
+          IF sy-subrc <> 0.
+            MESSAGE 'Product id not found' TYPE 'E'.
+          ENDIF.
+        ENDIF.
+        IF zdt81_prod_sales-quantity_sold > gs_sales-quantity_sold.
+          gv_quantity = zdt81_prod_sales-quantity_sold - gs_sales-quantity_sold.
+          ls_data1-quantity = ls_data1-quantity - gv_quantity.
+          gv_amount = zdt81_prod_sales-total_amount + ( gv_quantity * ls_data1-price ).
+          gs_sales-quantity_sold = zdt81_prod_sales-quantity_sold.
+          gs_sales-total_amount = gv_amount.
+          UPDATE zdt81_prod_sales
+          SET quantity_sold = zdt81_prod_sales-quantity_sold
+          total_amount = gv_amount
+          WHERE sales_id = gs_sales-sales_id.
+          IF sy-subrc <> 0.
+            MESSAGE 'error updating sales data' TYPE 'E'.
+          ELSE.
+            MESSAGE 'Data updated' TYPE 'S'.
+            MODIFY gt_sales FROM gs_sales
+              TRANSPORTING quantity_sold total_amount
+              WHERE sales_id = gs_sales-sales_id.
+
+          ENDIF.
+
+          UPDATE zdt81_products
+          SET quantity = ls_data1-quantity
+          WHERE product_id = gs_sales-product_id.
+          IF sy-subrc <> 0.
+            MESSAGE 'error updating product data' TYPE 'E'.
+          ENDIF.
+
+        ELSE.
+          gv_quantity = gs_sales-quantity_sold - zdt81_prod_sales-quantity_sold.
+          ls_data1-quantity = ls_data1-quantity + gv_quantity.
+          gv_amount = zdt81_prod_sales-total_amount - ( gv_quantity * ls_data1-price ).
+          gs_sales-quantity_sold = zdt81_prod_sales-quantity_sold.
+          gs_sales-total_amount = gv_amount.
+          UPDATE zdt81_prod_sales
+       SET quantity_sold = zdt81_prod_sales-quantity_sold
+       total_amount = gv_amount
+       WHERE sales_id = gs_sales-sales_id.
+          IF sy-subrc <> 0.
+            MESSAGE 'error updating sales data' TYPE 'E'.
+          ELSE.
+            MESSAGE 'Data updated' TYPE 'S'.
+            MODIFY gt_sales FROM gs_sales
+              TRANSPORTING quantity_sold total_amount
+              WHERE sales_id = gs_sales-sales_id.
+          ENDIF.
+
+          UPDATE zdt81_products
+          SET quantity = ls_data1-quantity
+          WHERE product_id = gs_sales-product_id.
+          IF sy-subrc <> 0.
+            MESSAGE 'error updating product data' TYPE 'E'.
+          ENDIF.
+
+
+        ENDIF.
+      ENDIF.
+
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  KEYS  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE keys INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      CLEAR : zdt81_products-product_id, zdt81_products-category, zdt81_products-price, zdt81_products-product_name,
+      zdt81_products-quantity, zdt81_products-supplier_id.
+      LEAVE TO SCREEN 9001.
+
+    WHEN 'EXIT'.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'CANCEL'.
+      LEAVE TO SCREEN 9001.
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9005  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9005 INPUT.
+
+  DATA: ld_filename      TYPE string,
+        ld_path          TYPE string,
+        ld_fullpath      TYPE string,
+        lo_excel         TYPE REF TO zcl_excel,
+        lo_xl_converter  TYPE REF TO zcl_excel_converter,
+        lo_worksheet     TYPE REF TO zcl_excel_worksheet,
+        lo_style_header  TYPE REF TO zcl_excel_style,
+        lo_style_header1 TYPE REF TO zcl_excel_style,
+        lv_style_guid    TYPE zexcel_cell_style,
+        lo_color         TYPE REF TO zcl_excel_style_color,
+        lo_style         TYPE REF TO zcl_excel_style.
+*      lt_data          TYPE TABLE OF ty_data.
+
+  CASE sy-ucomm.
+
+*Logic for generating and downloading the sales report.
+    WHEN 'D1'.
+      perform f_result1.
+*************************************************************************
+*Logic for generating and downloading the revenue report.
+    WHEN 'D2'.
+      perform f_result2.
+
+endcase.
+ENDMODULE.

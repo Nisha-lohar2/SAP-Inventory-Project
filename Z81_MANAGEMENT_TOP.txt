@@ -1,0 +1,61 @@
+*&---------------------------------------------------------------------*
+*& Include          Z81_MANAGEMENT_TOP
+*&---------------------------------------------------------------------*
+
+TABLES: zdt81_products, zdt81_suppliers, zdt81_prod_sales.
+
+CONTROLS : tc1 TYPE TABLEVIEW USING SCREEN '9003',
+           tc2 TYPE TABLEVIEW USING SCREEN '9004'.
+
+DATA: gv_supplier     TYPE zdt81_suppliers-supplier_id,
+      gv_flag1        TYPE i,
+      gv_select       TYPE char1,
+      gv_max_sales_id TYPE zdt81_prod_sales-sales_id,
+      gv_quantity     TYPE zdt81_prod_sales-quantity_sold,
+      gv_amount       TYPE zdt81_prod_sales-total_amount.
+
+DATA: gs_products TYPE zdt81_products,
+      gt_supplier TYPE TABLE OF zdt81_suppliers,
+      gs_supplier TYPE zdt81_suppliers,
+      gt_sales    TYPE TABLE OF zdt81_prod_sales,
+      gs_sales    TYPE zdt81_prod_sales.
+
+
+**************************************************************************************
+
+TYPES : BEGIN OF ty_sales,
+          product_id    TYPE zdt81_products-product_id,
+          quantity_sold TYPE zdt81_prod_sales-quantity_sold,
+          total_amount  TYPE zdt81_prod_sales-total_amount,
+          category      TYPE zdt81_products-category,
+          supplier_id   TYPE zdt81_products-supplier_id,
+        END OF ty_sales.
+
+TYPES : BEGIN OF ty_result1,
+          category TYPE zdt81_products-category,
+          sales    TYPE zdt81_prod_sales-quantity_sold,
+        END OF ty_result1.
+
+data : begin of gt_header occurs 0,
+        line type char30,
+  end of gt_header.
+
+TYPES : BEGIN OF ty_result2,
+          supplier_id TYPE zdt81_products-supplier_id,
+          revenue     TYPE zdt81_prod_sales-total_amount,
+        END OF ty_result2.
+
+DATA : gt_report  TYPE TABLE OF ty_sales,
+       gs_report  TYPE ty_sales,
+       gt_result1 TYPE TABLE OF ty_result1,
+       gs_result1 TYPE ty_result1,
+       gt_result2 TYPE TABLE OF ty_result2,
+       gs_result2 TYPE ty_result2,
+       g_file type string,
+       gt_file_table type filetable,
+       gv_user_action type i,
+       gs_file_table like line of gt_file_table,
+       gv_rc like sy-subrc,
+       gv_toggle_flag type c VALUE IS INITIAL,
+       gv_invoice type c,
+       cb_email.

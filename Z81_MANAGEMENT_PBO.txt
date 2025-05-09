@@ -1,0 +1,165 @@
+*&---------------------------------------------------------------------*
+*& Include          Z81_MANAGEMENT_PBO
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Module STATUS_9001 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9001 OUTPUT.
+  SET PF-STATUS 'STATUS'.
+  SET TITLEBAR 'MANAGEMENT'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module STATUS_9002 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9002 OUTPUT.
+  SET PF-STATUS 'PRODUCT_STATUS'.
+  SET TITLEBAR 'PRODUCT'.
+
+LOOP AT SCREEN.
+  if screen-group1 = 'P1'.
+    screen-input = 0.
+    MODIFY SCREEN.
+    endif.
+    endloop.
+
+if gv_toggle_flag is initial and sy-ucomm = 'CHANGE'.
+  LOOP AT SCREEN.
+  if screen-group1 = 'P1'.
+    screen-input = 1.
+    MODIFY SCREEN.
+    endif.
+    endloop.
+    gv_toggle_flag = 'X'.
+elseIF gv_toggle_flag is not initial and sy-ucomm = 'CHANGE'.
+      LOOP AT SCREEN.
+  if screen-group1 = 'P1'.
+*        if screen-name = 'zdt81_products-price'.
+    screen-input = 0.
+*    else.
+*      screen-input = 0.
+    MODIFY SCREEN.
+    endif.
+    endloop.
+    gv_toggle_flag = ''.
+    endif.
+
+  IF sy-ucomm = 'PENTER'.
+    LOOP AT SCREEN.
+      IF screen-name = 'zdt81_products-product_id' OR screen-name = 'zdt81_products-product_name'
+        OR screen-name = 'zdt81_products-supplier_id' OR screen-name = 'zdt81_products-quantity'
+        OR screen-name = 'zdt81_products-price' OR screen-name = 'zdt81_products-category'.
+        screen-required = 0.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDLOOP.
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-name = 'zdt81_products-product_id' OR screen-name = 'zdt81_products-product_name'
+        OR screen-name = 'zdt81_products-supplier_id' OR screen-name = 'zdt81_products-quantity'
+        OR screen-name = 'zdt81_products-price' OR screen-name = 'zdt81_products-category'.
+        screen-required = 1.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDLOOP.
+  ENDIF.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module GET_DATA OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE get_data OUTPUT.
+* SET PF-STATUS 'xxxxxxxx'.
+* SET TITLEBAR 'xxx'.
+
+  zdt81_suppliers-supplier_id = gs_supplier-supplier_id.
+  zdt81_suppliers-supplier_name = gs_supplier-supplier_name.
+  zdt81_suppliers-contact = gs_supplier-contact.
+  zdt81_suppliers-address = gs_supplier-address.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module STATUS_9003 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9003 OUTPUT.
+* SET PF-STATUS 'xxxxxxxx'.
+  SET TITLEBAR 'SUPPLIER'.
+
+  IF gv_flag1 IS NOT INITIAL.
+    DESCRIBE TABLE gt_supplier LINES tc1-lines.
+    IF NOT tc1-lines IS INITIAL.
+      tc1-lines = tc1-lines + 1.
+
+      IF tC1-lines = sy-tabix.
+        screen-input = 1.
+      ENDIF.
+      gv_flag1 = 0.
+
+    ENDIF.
+  ENDIF.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module GET_SALES_DATA OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE get_sales_data OUTPUT.
+* SET PF-STATUS 'xxxxxxxx'.
+ SET TITLEBAR 'SALES'.
+
+  zdt81_prod_sales-sales_id = gs_sales-sales_id.
+  zdt81_prod_sales-product_id = gs_sales-product_id.
+  zdt81_prod_sales-sales_date = gs_sales-sales_date.
+  zdt81_prod_sales-quantity_sold = gs_sales-quantity_sold.
+  zdt81_prod_sales-total_amount = gs_sales-total_amount.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module STATUS_9004 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9004 OUTPUT.
+* SET PF-STATUS 'xxxxxxxx'.
+ SET TITLEBAR 'SALES'.
+
+ loop at screen.
+   if screen-name = 'INVOICE'.
+     screen-input = 0.
+     MODIFY SCREEN.
+     endif.
+     endloop.
+
+     if gv_invoice is not initial.
+       loop at screen.
+   if screen-name = 'INVOICE'.
+     screen-input = 1.
+     MODIFY SCREEN.
+     endif.
+     endloop.
+     endif.
+
+  IF gv_flag1 IS NOT INITIAL.
+    DESCRIBE TABLE gt_sales LINES tc2-lines.
+    IF NOT tc2-lines IS INITIAL.
+      tc2-lines = tc2-lines + 1.
+
+      IF tc2-lines = sy-tabix.
+        screen-input = 1.
+      ENDIF.
+      gv_flag1 = 0.
+
+    ENDIF.
+  ENDIF.
+
+
+
+ENDMODULE.
